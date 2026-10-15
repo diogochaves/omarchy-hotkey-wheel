@@ -426,6 +426,13 @@ ShellRoot {
                   "hold event opens at once where it was pressed")
             wheel.hyprlandEvent(id + " release e-1 " + (sx + 302) + " " + (sy + 311))
             check(!wheel.opened && !wheel.pendingCommand, "release event at the press point runs nothing")
+            wheel.hyprlandEvent(id + " hold e-2 " + (sx + 300) + " " + (sy + 310))
+            wheel.hyprlandEvent(id + " settle e-2 " + (sx + 302) + " " + (sy + 311))
+            check(wheel.opened && !wheel.holding && !wheel.settling && !wheel.pendingCommand,
+                  "settle event at the press point leaves it open for a click")
+            wheel.hyprlandEvent(id + " settle e-2 " + (sx + 302) + " " + (sy + 311))
+            check(wheel.opened && !wheel.holding && !wheel.settling && !wheel.pendingCommand, "a second settle changes nothing")
+            wheel.dismiss()
             wheel.open("{}")
             wheel.hyprlandEvent(id + " cancel")
             check(!wheel.opened, "cancel event closes it")

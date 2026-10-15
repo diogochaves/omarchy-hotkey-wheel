@@ -14,6 +14,8 @@ Item {
     property bool locating: false
     property bool holding: false
     property bool finishing: false
+    // This release came as "settle": with no slot picked, stay open for a click.
+    property bool settling: false
     property string gestureToken: ""
     // Recent released tokens: a release IPC can overtake its own press.
     property var releasedTokens: []
@@ -62,6 +64,7 @@ Item {
         gestureToken = String(payload.token || "")
         holding = payload.mode === "hold"
         finishing = false
+        settling = false
         selected = -1
         pointerAngle = NaN
         scrolled = 0
@@ -101,6 +104,7 @@ Item {
     function close() {
         locating = false
         finishing = false
+        settling = false
         opened = false
         holding = false
         selected = -1
@@ -119,11 +123,24 @@ Item {
         if (!opened) return
         if (isFinite(x) && isFinite(y)) {
             point(x - targetScreen.x, y - targetScreen.y)
-            activate()
+            finish()
         } else {
             finishing = true
             queryCursor()
         }
+    }
+
+    // A settled release that picked nothing turns the held wheel into a
+    // clicked one in place: the layer stays mapped, so nothing blinks.
+    function finish() {
+        if (settling && selected < 0) {
+            holding = false
+            finishing = false
+            settling = false
+            Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+            return
+        }
+        activate()
     }
 
     function releaseGesture(token, x, y) {
@@ -131,8 +148,14 @@ Item {
         if (token === gestureToken) release(x, y)
     }
 
+    function settleGesture(token, x, y) {
+        settling = token === gestureToken && holding
+        releaseGesture(token, x, y)
+    }
+
     // "<id> hold <token> x y", "<id> release <token> x y" and "<id> cancel"
-    // from bindings.lua.
+    // from bindings.lua; "<id> settle <token> x y" is a release that stays open
+    // when it picks nothing.
     function hyprlandEvent(data) {
         var parts = String(data).split(" ")
         if (parts[0] !== "io.github.erikrjohansson.hotkey-wheel") return
@@ -143,6 +166,7 @@ Item {
         if (parts[1] === "hold" && parts.length === 5)
             open(JSON.stringify({ mode: "hold", token: parts[2], x: x, y: y }))
         else if (parts[1] === "release" && parts.length === 5) releaseGesture(parts[2], x, y)
+        else if (parts[1] === "settle" && parts.length === 5) settleGesture(parts[2], x, y)
         else if (parts[1] === "cancel") dismiss()
     }
 
@@ -258,7 +282,7 @@ Item {
                 if (code !== 0 || !isFinite(cursor.x) || !isFinite(cursor.y)) throw new Error("cursor")
                 if (root.finishing) {
                     root.point(cursor.x - root.targetScreen.x, cursor.y - root.targetScreen.y)
-                    root.activate()
+                    root.finish()
                 } else root.place(cursor.x, cursor.y)
             } catch (e) { root.dismiss() }
         }
